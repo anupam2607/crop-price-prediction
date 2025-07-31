@@ -1,58 +1,37 @@
-from flask import Flask, request, jsonify
+import streamlit as st
 from datetime import datetime
-import numpy as np
-import pickle
-import tensorflow as tf
-
-# Import your class from pricecode.py
 from pricecode import CropPricePredictionSystem
 
-app = Flask(__name__)
+st.set_page_config(page_title="Crop Price Predictor", layout="centered")
 
-# Load model and scalers
+st.title("🌾 Crop Price Prediction System")
+st.markdown("Predict future crop prices using weather data and LSTM models.")
+
+# Initialize model
 predictor = CropPricePredictionSystem()
 predictor.load_data()
-predictor.load_model('crop_price')  # Assumes crop_price_model.h5 and crop_price_scalers.pkl exist
+predictor.load_model("crop_price")  # Ensure crop_price_model.h5 and scalers are present
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    data = request.get_json(force=True)
-    crop = data.get('crop')
-    district = data.get('district')
-    date_str = data.get('date')
-    api_key = data.get('api_key', None)
+# Input fields
+crop = st.selectbox("Select Crop", ["Wheat", "Rice", "Maize", "Soybean", "Gram"])
+district = st.text_input("Enter District Name")
+date_str = st.date_input("Select Prediction Date", datetime.today())
+api_key = st.text_input("Enter OpenWeatherMap API Key", type="password")
 
+# Predict single day
+if st.button("Predict Price"):
     try:
-        prediction_date = datetime.strptime(date_str, "%Y-%m-%d")
-    except Exception:
-        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
-
-    try:
-        result = predictor.predict_price(crop, district, prediction_date, api_key)
+        result = predictor.predict_price(crop, district, date_str, api_key)
+        st.success(f"Predicted price on {date_str.strftime('%Y-%m-%d')} in {district}: ₹{result['predicted_price']:.2f}")
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        st.error(f"Prediction error: {e}")
 
-    return jsonify(result)
-
-@app.route('/predict_week', methods=['POST'])
-def predict_week():
-    data = request.get_json(force=True)
-    crop = data.get('crop')
-    district = data.get('district')
-    date_str = data.get('date')
-    api_key = data.get('api_key', None)
-
+# Predict full week
+if st.button("Predict Week Ahead"):
     try:
-        start_date = datetime.strptime(date_str, "%Y-%m-%d")
-    except Exception:
-        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
-
-    try:
-        results = predictor.predict_week_ahead(crop, district, start_date, api_key)
+        results = predictor.predict_week_ahead(crop, district, date_str, api_key)
+        st.markdown("### 📅 Weekly Forecast")
+        for item in results['predictions']:
+            st.write(f"{item['date']}: ₹{item['predicted_price']:.2f}")
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-    return jsonify(results)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+        st.error(f"Week prediction error: {e}")
